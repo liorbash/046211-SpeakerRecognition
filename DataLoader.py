@@ -24,7 +24,7 @@ import librosa
 import librosa.display
 
 class VoxCaleb1MelSpecDataset(Dataset):
-    def __init__(self, data_dir, subset, input_size, sr=16000, do_log=False, download=False):
+    def __init__(self, data_dir, subset, transform=None, min_max_scale=True, sr=16000, do_log=False, download=False):
         """
         Args:
             csv_file (string): Path to the csv file with annotations.
@@ -33,13 +33,14 @@ class VoxCaleb1MelSpecDataset(Dataset):
             input size (int)
         """
         self.data_dir = data_dir
-        #self.transform = transform  
-        self.input_size = input_size  
+        self.transform = transform  
+        self.min_max_scale = min_max_scale  
         self.do_log = do_log
         if subset == 'val':
           subset = 'dev'
         self.dataset = datasets.VoxCeleb1Identification(root=self.data_dir, subset=subset, download=download)
         self.idx = {'waveform': 0, 'sr': 1, 'speaker_id': 2, 'path_wav': 3}
+        self.count = 0 ##################
         return
 
     def __len__(self):
@@ -48,40 +49,46 @@ class VoxCaleb1MelSpecDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
+        
+        ##################
+        if type(idx) == list:
+          self.count += len(list)
+        else:
+          self.count += 1
+        ##################
 
         sample = self.dataset[idx]
 
         # Transforms
-        ## define transforms
-        transform1 = torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=512, win_length=400, hop_length=160, f_min=0.0, f_max=8000, pad=0, n_mels=40)
-        scaler = MinMaxScaler()
-        transforms2 = torch.nn.Sequential(
-          torchvision.transforms.Normalize([0.485], [0.229]),
-          torchvision.transforms.Resize((self.input_size, self.input_size))
-        )
         sample = list(sample)
-        ## transform the audio samples
-        sample[self.idx['waveform']] = transform1(sample[self.idx['waveform']])
-        sample[self.idx['waveform']][0,:,:] = torch.Tensor(scaler.fit_transform(sample[self.idx['waveform']][0,:,:]))
-        sample[self.idx['waveform']] = transforms2(sample[self.idx['waveform']])
+        if self.transform:
+          sample[self.idx['waveform']] = self.transform(sample[self.idx['waveform']])
+
+        if self.min_max_scale:
+          scaler = MinMaxScaler()
+          sample[self.idx['waveform']][0,:,:] = torch.Tensor(scaler.fit_transform(sample[self.idx['waveform']][0,:,:]))
+
         sample = tuple(sample)
         
         # RGB
         image = torch.cat((sample[self.idx['waveform']], sample[self.idx['waveform']], sample[self.idx['waveform']]), 0)
-        #image = sample[self.idx['waveform']]
         # labels start at 0 instead of 1
         label = sample[self.idx['speaker_id']] - 1
         return image, label
 
 def get_datasets(input_size, dataset_dir='.', download=False):
-  train_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'train', input_size=input_size, download=download)
-  validation_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'dev', input_size=input_size, download=download)
-  test_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'test', input_size=input_size, download=download)
+  transforms = torch.nn.Sequential(
+    torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=512, win_length=400, hop_length=160, f_min=0.0, f_max=8000, pad=0, n_mels=40), 
+    torchvision.transforms.Resize((input_size, input_size))
+  )
+  train_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'train', transform=transforms, download=download)
+  validation_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'dev', transform=transforms, download=download)
+  test_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'test', transform=transforms, download=download)
   return {'train': train_dataset, 'val': validation_dataset, 'test': test_dataset}
 
-def get_dataloader(dataset, batch_size, num_workers=2):
+def get_dataloader(dataset, batch_size, num_workers=2, shuffle=True):
   data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-                                                      num_workers=num_workers)
+                                            num_workers=num_workers, shuffle=shuffle)
         
   return data_loader
 
