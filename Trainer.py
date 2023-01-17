@@ -76,7 +76,25 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Tr
   else:
     raise NotImplementedError
   return model_ft, input_size
-  
+
+def initialize_resnet_3fc_layers(num_classes, use_pretrained=True):
+  # new method from torchvision >= 0.13
+  weights = 'DEFAULT' if use_pretrained else None
+  # to use other checkpoints than the default ones, check the model's available chekpoints here:
+  # https://pytorch.org/vision/stable/models.html
+  model_ft = models.resnet18(weights=weights)
+  set_parameter_requires_grad(model_ft, feature_extracting=True)
+  num_ftrs = model_ft.fc.in_features
+  # replace the last FC layer
+  model_ft.fc = nn.Sequential(
+    nn.Linear(num_ftrs, 4096),   #fc6
+    nn.AvgPool1d(8, stride=1),
+    nn.Linear(4089 , 1024),      #fc7
+    nn.Linear(1024, num_classes) #fc8
+  )
+  input_size = 224
+  return model_ft, input_size
+
 class Trainer():
   def __init__(self, model, device, input_size, criterion, optimizer_ft, scheduler, batch_size, dataset_dir='.', download_dataset=False, num_epochs=25, num_workers=2):
     self.model = model
@@ -119,7 +137,11 @@ class Trainer():
                 labels = labels.to(self.device)
 
                 # zero the parameter gradients
-                self.optimizer.zero_grad()
+                if type(self.optimizer) == list:
+                    for opt in self.optimizer:
+                        opt.zero_grad()
+                else:
+                    self.optimizer.zero_grad()
 
                 # forward
                 # track history if only in train
@@ -141,7 +163,11 @@ class Trainer():
                     # backward + optimize only if in training phase
                     if phase == 'train':
                         loss.backward()
-                        self.optimizer.step()
+                        if type(self.optimizer) == list:
+                            for opt in self.optimizer:
+                                opt.step()
+                        else:
+                            self.optimizer.step()
 
                 # statistics
                 iter_loss = loss.item() * inputs.size(0)
@@ -171,12 +197,21 @@ class Trainer():
             if phase == 'train':
                 # Save checkpoint
                 save_path = f'./drive/MyDrive/046211/{start_datetime}_model_epoch{str(epoch)}.pt'
-                torch.save({
-                          'epoch': epoch,
-                          'model_state_dict': self.model.state_dict(),
-                          'optimizer_state_dict': self.optimizer.state_dict(),
-                          'loss': epoch_loss,
-                          }, save_path)
+                if type(self.optimizer) == list:
+                    # Save the NN optimizer
+                    torch.save({
+                              'epoch': epoch,
+                              'model_state_dict': self.model.state_dict(),
+                              'optimizer_state_dict': self.optimizer[0].state_dict(),
+                              'loss': epoch_loss,
+                              }, save_path)
+                else:
+                    torch.save({
+                              'epoch': epoch,
+                              'model_state_dict': self.model.state_dict(),
+                              'optimizer_state_dict': self.optimizer.state_dict(),
+                              'loss': epoch_loss,
+                              }, save_path)
 
             # deep copy the model
             if phase == 'val' and epoch_acc > best_acc:
@@ -202,12 +237,12 @@ class Trainer():
         iterations_df.to_excel(writer, sheet_name='Iterations', index=False)
     return 
 
-    def evaluate_model(self):
-      X_test, y_test = list(iter(self.dataloaders['test']))[0]
-      self.model.eval()
-      with torch.no_grad():
-          test_outputs = self.model(X_test.to(self.device))
-          _, preds = torch.max(test_outputs, 1)
-      test_error = torch.sum(preds != y_test.to(self.device)) / len(y_test)
-      print(f'test misclassification error: {test_error.item()}')
-      return
+  def evaluate_model(self):
+    X_test, y_test = list(iter(self.dataloaders['test']))[0]
+    self.model.eval()
+    with torch.no_grad():
+        test_outputs = self.model(X_test.to(self.device))
+        _, preds = torch.max(test_outputs, 1)
+    test_error = torch.sum(preds != y_test.to(self.device)) / len(y_test)
+    print(f'test misclassification error: {test_error.item()}')
+    return
