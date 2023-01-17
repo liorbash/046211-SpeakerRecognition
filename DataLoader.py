@@ -16,7 +16,7 @@ import numpy as np
 import torch
 from sklearn.preprocessing import MinMaxScaler
 
-import MelSpectrogram
+import Melspectogram
 
 class VoxCaleb1MelSpecDataset(Dataset):
     def __init__(self, data_dir, subset, transform=None, min_max_scale=True, sr=16000, do_log=False, download=False):
@@ -56,7 +56,7 @@ class VoxCaleb1MelSpecDataset(Dataset):
 
         # Transforms
         sample = list(sample)
-        sample[self.idx['waveform']] = MelSpectrogram.transform(sample[self.idx['waveform']])
+        sample[self.idx['waveform']] = Melspectogram.transform(sample[self.idx['waveform']].cpu().numpy()[0])
         ## Resize
         if self.transform:
           sample[self.idx['waveform']] = self.transform(sample[self.idx['waveform']])
