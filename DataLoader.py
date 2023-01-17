@@ -16,12 +16,7 @@ import numpy as np
 import torch
 from sklearn.preprocessing import MinMaxScaler
 
-# converting audio to melspectograms
-import os
-import matplotlib.pyplot as plt
-#for loading and visualizing audio files
-import librosa
-import librosa.display
+import MelSpectrogram
 
 class VoxCaleb1MelSpecDataset(Dataset):
     def __init__(self, data_dir, subset, transform=None, min_max_scale=True, sr=16000, do_log=False, download=False):
@@ -61,12 +56,14 @@ class VoxCaleb1MelSpecDataset(Dataset):
 
         # Transforms
         sample = list(sample)
+        sample[self.idx['waveform']] = MelSpectrogram.transform(sample[self.idx['waveform']])
+        ## Resize
         if self.transform:
           sample[self.idx['waveform']] = self.transform(sample[self.idx['waveform']])
 
-        if self.min_max_scale:
-          scaler = MinMaxScaler()
-          sample[self.idx['waveform']][0,:,:] = torch.Tensor(scaler.fit_transform(sample[self.idx['waveform']][0,:,:]))
+        #if self.min_max_scale:
+          #scaler = MinMaxScaler()
+          #sample[self.idx['waveform']][0,:,:] = torch.Tensor(scaler.fit_transform(sample[self.idx['waveform']][0,:,:]))
 
         sample = tuple(sample)
         
@@ -77,10 +74,7 @@ class VoxCaleb1MelSpecDataset(Dataset):
         return image, label
 
 def get_datasets(input_size, dataset_dir='.', download=False):
-  transforms = torch.nn.Sequential(
-    torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=512, win_length=400, hop_length=160, f_min=0.0, f_max=8000, pad=0, n_mels=40), 
-    torchvision.transforms.Resize((input_size, input_size))
-  )
+  transforms = torchvision.transforms.Resize((input_size, input_size))
   train_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'train', transform=transforms, download=download)
   validation_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'dev', transform=transforms, download=download)
   test_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'test', transform=transforms, download=download)

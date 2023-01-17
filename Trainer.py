@@ -3,6 +3,8 @@ import torch.nn as nn
 from torchvision import models
 import copy
 import time
+import datetime
+import pandas as pd
 
 import DataLoader
 
@@ -89,12 +91,13 @@ class Trainer():
 
   def train_model(self, phase):
     since = time.time()
+    start_datetime = str(datetime.datetime.now())
 
     best_model_wts = copy.deepcopy(self.model.state_dict())
     best_acc = 0.0
 
-    iterations_results = {'Iteration': [], 'Epoch':[], 'Loss': [], 'Accuarcy': []}
-    epochs_results = {'Epoch': [], 'Loss': [], 'Accuarcy': []}
+    iterations_results = {'Iteration': [], 'Epoch':[], 'Loss': [], 'Accuarcy': [], 'Phase': []}
+    epochs_results = {'Epoch': [], 'Loss': [], 'Accuarcy': [], 'Phase': []}
 
     for epoch in range(self.num_epochs):
         print(f'Epoch {epoch}/{self.num_epochs - 1}')
@@ -111,7 +114,7 @@ class Trainer():
             running_corrects = 0
 
             # Iterate over data.
-            for iter, (inputs, labels) in enumerate(self.dataloaders[phase]):
+            for iter_i, (inputs, labels) in enumerate(self.dataloaders[phase]):
                 inputs = inputs.to(self.device)
                 labels = labels.to(self.device)
 
@@ -146,10 +149,11 @@ class Trainer():
                 iter_corrects = torch.sum(preds == labels.data)
                 running_corrects += iter_corrects
                 ## collect data
-                iterations_results['Iteration'].append(iter)
+                iterations_results['Iteration'].append(iter_i)
                 iterations_results['Epoch'].append(epoch)
                 iterations_results['Loss'].append(iter_loss)
-                iterations_results['Accuarcy'].append(iter_corrects.cpu().numpy()[0])
+                iterations_results['Accuarcy'].append(iter_corrects.cpu().numpy())
+                iterations_results['Phase'].append(phase)
 
             if phase == 'train':
                 self.scheduler.step()
@@ -159,9 +163,20 @@ class Trainer():
             ## collect data
             epochs_results['Epoch'].append(epoch)
             epochs_results['Loss'].append(epoch_loss)
-            epochs_results['Accuarcy'].append(epoch_acc.cpu().numpy()[0])
+            epochs_results['Accuarcy'].append(epoch_acc.cpu().numpy())
+            epochs_results['Phase'].append(phase)
 
             print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+
+            if phase == 'train':
+                # Save checkpoint
+                save_path = f'./drive/MyDrive/046211/{start_datetime}_model_epoch{str(epoch)}.pt'
+                torch.save({
+                          'epoch': epoch,
+                          'model_state_dict': self.model.state_dict(),
+                          'optimizer_state_dict': self.optimizer.state_dict(),
+                          'loss': epoch_loss,
+                          }, save_path)
 
             # deep copy the model
             if phase == 'val' and epoch_acc > best_acc:
@@ -181,7 +196,7 @@ class Trainer():
     iterations_df = pd.DataFrame(iterations_results)
     model_df = pd.DataFrame({'name': ['criterion', 'optimizer', 'scheduler.step_size', 'scheduler.gamma', 'batch_size'],
                              'value': [str(self.criterion), str(self.optimizer), str(self.scheduler.step_size), str(self.scheduler.gamma), str(self.batch_size)]})
-    with pd.ExcelWriter(f'{since}_results.xlsx') as writer: 
+    with pd.ExcelWriter(f'./drive/MyDrive/046211/{start_datetime}_model_results.xlsx') as writer: 
         model_df.to_excel(writer, sheet_name='Model', index=False) 
         epochs_df.to_excel(writer, sheet_name='Epochs', index=False)
         iterations_df.to_excel(writer, sheet_name='Iterations', index=False)
