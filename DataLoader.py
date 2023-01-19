@@ -18,24 +18,27 @@ from sklearn.preprocessing import MinMaxScaler
 
 import Melspectogram
 
+
 class VoxCaleb1MelSpecDataset(Dataset):
-    def __init__(self, data_dir, subset, transform=None, min_max_scale=True, sr=16000, do_log=False, download=False):
+    def __init__(self, data_dir, subset, transform=None, min_max_scale=True, normalize_mel=True, sr=16000, download=False,):
         """
         Args:
-            csv_file (string): Path to the csv file with annotations.
             data_dir (string): Directory with all the audio files.
-            sr (int): audio files' sample rate
-            input size (int)
+            subset (string): 'train', 'val'/'dev' or 'test'.
+            transform (torch.transforms): Input's transforms.
+            min_max_scale (bool): If true, scaling min-max the input after transforms.
+            normalize_mel (bool): If true, normalize mel-spectogram by mean and std.
+            sr (int): Audio sample rate.
+            download (bool): Whether to download the dataset or not.
         """
         self.data_dir = data_dir
-        self.transform = transform  
-        self.min_max_scale = min_max_scale  
-        self.do_log = do_log
+        self.transform = transform
+        self.min_max_scale = min_max_scale
+        self.normalize_mel = normalize_mel
         if subset == 'val':
-          subset = 'dev'
+            subset = 'dev'
         self.dataset = datasets.VoxCeleb1Identification(root=self.data_dir, subset=subset, download=download)
         self.idx = {'waveform': 0, 'sr': 1, 'speaker_id': 2, 'path_wav': 3}
-        self.count = 0 ##################
         return
 
     def __len__(self):
@@ -44,64 +47,60 @@ class VoxCaleb1MelSpecDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        
-        ##################
-        if type(idx) == list:
-          self.count += len(list)
-        else:
-          self.count += 1
-        ##################
 
         sample = self.dataset[idx]
 
         # Transforms
         sample = list(sample)
-        sample[self.idx['waveform']] = Melspectogram.transform(sample[self.idx['waveform']].cpu().numpy()[0])
-        ## Resize
-        if self.transform:
-          sample[self.idx['waveform']] = self.transform(sample[self.idx['waveform']])
+        if self.normalize_mel:
+            sample[self.idx['waveform']] = Melspectogram.transform(sample[self.idx['waveform']].cpu().numpy()[0])
 
-        #if self.min_max_scale:
-          #scaler = MinMaxScaler()
-          #sample[self.idx['waveform']][0,:,:] = torch.Tensor(scaler.fit_transform(sample[self.idx['waveform']][0,:,:]))
+        if self.transform:
+            sample[self.idx['waveform']] = self.transform(sample[self.idx['waveform']])
+
+        if self.min_max_scale:
+            scaler = MinMaxScaler()
+            sample[self.idx['waveform']][0, :, :] = torch.Tensor(scaler.fit_transform(sample[self.idx['waveform']][0, :, :]))
 
         sample = tuple(sample)
-        
+
         # RGB
         image = torch.cat((sample[self.idx['waveform']], sample[self.idx['waveform']], sample[self.idx['waveform']]), 0)
         # labels start at 0 instead of 1
         label = sample[self.idx['speaker_id']] - 1
         return image, label
 
-def get_datasets(input_size, dataset_dir='.', download=False):
-  transforms = torchvision.transforms.Resize((input_size, input_size))
-  train_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'train', transform=transforms, download=download)
-  validation_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'dev', transform=transforms, download=download)
-  test_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'test', transform=transforms, download=download)
-  return {'train': train_dataset, 'val': validation_dataset, 'test': test_dataset}
+
+def get_datasets(input_size, dataset_dir='.', download=False, min_max_scale=False, normalize_mel=True):
+    if normalize_mel:
+        transforms = torchvision.transforms.Resize((input_size, input_size))
+    else:
+        transforms = torch.nn.Sequential(
+            torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=512, win_length=400, hop_length=160,
+                                                 f_min=0.0, f_max=8000, pad=0, n_mels=40),
+            torchvision.transforms.Resize((input_size, input_size))
+        )
+    train_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'train', transform=transforms, download=download,
+                                            min_max_scale=min_max_scale, normalize_mel=normalize_mel)
+    validation_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'dev', transform=transforms, download=download,
+                                                 min_max_scale=min_max_scale, normalize_mel=normalize_mel)
+    test_dataset = VoxCaleb1MelSpecDataset(dataset_dir, 'test', transform=transforms, download=download,
+                                           min_max_scale=min_max_scale, normalize_mel=normalize_mel)
+    return {'train': train_dataset, 'val': validation_dataset, 'test': test_dataset}
+
 
 def get_dataloader(dataset, batch_size, num_workers=2, shuffle=True):
-  data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-                                            num_workers=num_workers, shuffle=shuffle)
-        
-  return data_loader
+    data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+                                              num_workers=num_workers, shuffle=shuffle)
 
-def get_dataloaders(dataset_list, train_batch_size, num_workers=2):
-    train_dataloader = get_dataloader(dataset_list['train'], train_batch_size, num_workers=num_workers)
-    validation_dataloader = get_dataloader(dataset_list['val'], len(dataset_list['val']), num_workers=num_workers)
-    test_dataloader = get_dataloader(dataset_list['test'], len(dataset_list['test']), num_workers=num_workers)
+    return data_loader
+
+
+def get_dataloaders(dataset_list, train_batch_size, num_workers=2, shuffle=True):
+    train_dataloader = get_dataloader(dataset_list['train'], train_batch_size, num_workers=num_workers,
+                                      shuffle=shuffle)
+    validation_dataloader = get_dataloader(dataset_list['val'], len(dataset_list['val']), num_workers=num_workers,
+                                           shuffle=shuffle)
+    test_dataloader = get_dataloader(dataset_list['test'], len(dataset_list['test']), num_workers=num_workers,
+                                     shuffle=shuffle)
     return {'train': train_dataloader, 'val': validation_dataloader, 'test': test_dataloader}
-
-def plot_batch(dataset, batch_size, num_workers):
-  loader = get_dataloader(dataset, batch_size=batch_size, num_workers=num_workers)
-  dataiter = iter(loader)
-  data = next(dataiter)
-  images = data[0]
-  labels = data[2]
-
-  fig, axes = plt.subplots(1, len(images), figsize=(12,2.5))
-  for idx, image in enumerate(images):
-      axes[idx].imshow(image[0,:,:])
-      axes[idx].set_title(labels[idx])
-      axes[idx].set_xticks([])
-      axes[idx].set_yticks([])
