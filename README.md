@@ -53,9 +53,38 @@ Due to computational and memory restrictions, our model was trained on the first
 | `pandas`  | `1.3.5`  |
 | `librosa`  | `0.8.1`  |
 | `matplotlib`  | `3.2.2`  |
-| `logzero` | `1.7.0`  |
 
 ### Running our model
+1. **Download VoxCeleb1 dataset** <br>
+   Run <br>
+   `python arrange_dataset.py [--download] --n_speakers <num_of_speakers> --dataset_dir <path_to_dataset> --checkpoint_dir <path>` 
+
+  | Argument  | Explanation |
+  | ------------- | ------------- |
+  | `n_speakers`  | the number of speakers wanted in the dataset, needs to be <= 1211 |
+  | `download`  | if Added to commandline, then downloading to `dataset_dir` the VoxCeleb1 dataset |
+  | `dataset_dir`  | path to the directory of the dataset |
+  | `resplit`  | if Added to commandline, then re-splitting the dataset to train, validation and loss accordint to `train_size` and `val_size` |
+  | `train_size`  | train's element of the dataset, by default 0.6 |
+  | `val_size`  | validation's element of the dataset, by default 0.2 |
+  
+2. **Train our model** <br>
+  To train our model, run <br>
+  `python train_model.py --ccl_reg --n_speakers <num_of_speakers> --dataset_dir <path_to_dataset> --checkpoint_dir <path>`
+
+  | Argument  | Explanation |
+  | ------------- | ------------- |
+  | `n_speakers`  | the number of speakers in the dataset, needs to be <= 1211 |
+  | `dataset_dir`  | path to the directory of the dataset |
+  | `checkpoint_dir`  | path to save the checkpoints |
+  | `ccl_reg`  | if Added to commandline, then training with contrastive-center loss regularization |
+  | `batch_size`  | train's batch_size, by default 64 |
+  | `n_epochs`  | number of epochs, by default 20 | 
+  <br>
+    Note: There are more arguments, such as Renet's learning rate. To see all of them run: <code>python train_model.py -h</code>
+
+### Checkpoints
+The 'checkpoints' directory contains checkpoints of models trained on reduced VoxCeleb1 dataset of 200 speakers.<br>
 
 ### References
 We based our project on the results of the following papers and github repositories:
