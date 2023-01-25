@@ -83,9 +83,6 @@ Due to computational and memory restrictions, our model was trained on the first
   <br>
     Note: There are more arguments, such as Renet's learning rate. To see all of them run: <code>python train_model.py -h</code>
 
-### Checkpoints
-The 'checkpoints' directory contains checkpoints of models trained on reduced VoxCeleb1 dataset of 200 speakers.<br>
-
 ### References
 We based our project on the results of the following papers and github repositories:
 <br>[1] S. Bianco, E. Cereda and P. Napoletano, "Discriminative Deep Audio Feature Embedding for Speaker Recognition in the Wild," 2018 IEEE 8th International Conference on Consumer Electronics - Berlin (ICCE-Berlin), Berlin, Germany, 2018, pp. 1-5, doi: 10.1109/ICCE-Berlin.2018.8576237.
