@@ -7,8 +7,8 @@ import time
 import datetime
 import pandas as pd
 
-import DataLoader
-import Metric
+from data_utils import DataLoader
+from helper_functions import Metric
 
 
 def set_parameter_requires_grad(model, feature_extracting=False):
@@ -35,7 +35,7 @@ def initialize_resnet_model(num_classes, feature_extract, use_pretrained=True):
         use_pretrained (bool)
     """
     weights = 'DEFAULT' if use_pretrained else None
-    # to use other checkpoints than the default ones, check the model's available chekpoints here:
+    # to use other checkpoints than the default ones, check the model's available checkpoints here:
     # https://pytorch.org/vision/stable/models.html
     model_ft = models.resnet18(weights=weights)
     set_parameter_requires_grad(model_ft, feature_extract)
@@ -48,22 +48,29 @@ def initialize_resnet_model(num_classes, feature_extract, use_pretrained=True):
 class Trainer():
     def __init__(self, model, device, input_size, criterion, optimizer_ft, scheduler, batch_size, dataset_dir='.',
                  download_dataset=False, num_epochs=20, num_workers=2, min_max_scale=False, normalize_mel=True,
-                 shuffle=True):
+                 shuffle=True, resplit=False, train_size=0.6, val_size=0.2,
+                 checkpoint_path='./drive/MyDrive/046211'):
         """
-        Args:
-            model (torch.model)
-            device (string): 'cpu' or 'cuda:X'
-            input_size (int)
-            criterion (nn)
-            optimizer_ft (torch.optim)
-            scheduler (torch.optim.lr_scheduler)
-            batch_size (int)
-            dataset_dir (str)
-            download_dataset (bool)
-            num_epochs (int)
-            num_workers (int)
-            min_max_scale (bool): If true, input is min-max scaled
-            normalize_mel (bool): If true, normalize input by mean and std according to time
+          Class training the model
+        :param model: torch.resnet18
+        :param device: string, 'cpu' or 'cuda:X'
+        :param input_size: int
+        :param criterion: nn
+        :param optimizer_ft: torch.optim
+        :param scheduler: torch.optim.lr_scheduler
+        :param batch_size: int
+        :param dataset_dir: str
+        :param download_dataset: bool
+        :param num_epochs: int
+        :param num_workers: int
+        :param min_max_scale: bool. If true, input is min-max scaled
+        :param normalize_mel: bool. If true, normalize input by mean and std by frequency bins
+        :param shuffle: bool, for dataloader
+        :param resplit: bool. If True, then re-splitting the dataset to train, val and test according to train_size
+                              and val_size
+        :param train_size: float. Relevant if resplit is True
+        :param val_size: float. Relevant if resplit is True
+        :param checkpoint_path: str
         """
         self.model = model
         self.device = device
@@ -77,10 +84,16 @@ class Trainer():
         self.dataloaders = DataLoader.get_dataloaders(self.datasets, batch_size, num_workers=num_workers,
                                                       shuffle=shuffle)
 
-    def train_model(self, phase):
+        if checkpoint_path.endswith('/'):
+            self.checkpoint_path = checkpoint_path[:-1]
+        else:
+            self.checkpoint_path = checkpoint_path
+
+    def train_model(self):
         """
-        Args:
-            phase (string): 'train' or 'val'
+        Train model
+        :param self
+        :return: None
         """
         since = time.time()
         start_datetime = str(datetime.datetime.now())
@@ -155,7 +168,7 @@ class Trainer():
 
                 if phase == 'train':
                     # Save checkpoint
-                    save_path = f'./drive/MyDrive/046211/{start_datetime}_model_epoch{str(epoch)}.pt'
+                    save_path = f'{self.checkpoint_path}/{start_datetime}_model_epoch{str(epoch)}.pt'
                     torch.save({
                         'epoch': epoch,
                         'model_state_dict': self.model.state_dict(),
@@ -167,6 +180,7 @@ class Trainer():
                 if phase == 'val' and epoch_acc > best_acc:
                     best_acc = epoch_acc
                     best_model_wts = copy.deepcopy(self.model.state_dict())
+                    best_epoch = epoch
 
             print()
 
@@ -184,13 +198,20 @@ class Trainer():
             {'name': ['criterion', 'optimizer', 'scheduler.step_size', 'scheduler.gamma', 'batch_size'],
              'value': [str(self.criterion), str(self.optimizer), str(self.scheduler.step_size),
                        str(self.scheduler.gamma), str(self.batch_size)]})
-        with pd.ExcelWriter(f'./drive/MyDrive/046211/{start_datetime}_model_results.xlsx') as writer:
+        with pd.ExcelWriter(f'{self.checkpoint_path}/{start_datetime}_model_results.xlsx') as writer:
             model_df.to_excel(writer, sheet_name='Model', index=False)
             epochs_df.to_excel(writer, sheet_name='Epochs', index=False)
             iterations_df.to_excel(writer, sheet_name='Iterations', index=False)
-        return
 
-    def train_model_ccl(self, phase):
+        best_checkpoint = f'{self.checkpoint_path}/{start_datetime}_model_epoch{str(best_epoch)}.pt'
+        return best_epoch
+
+    def train_model_ccl(self):
+        """
+        Train model with Contrastive-center loss regularization
+        :param self
+        :return: None
+        """
         since = time.time()
         start_datetime = str(datetime.datetime.now())
 
@@ -204,10 +225,7 @@ class Trainer():
         criterion_nn, criterion_ccl = self.criterion
 
         # Using average pooling layer output as input to contrastive center loss
-        return_nodes = {
-            "avgpool": "avgpool"
-        }
-        avgpool = create_feature_extractor(self.model, return_nodes=return_nodes)
+        avgpool = create_feature_extractor(self.model, return_nodes={"avgpool": "avgpool"})
 
         for epoch in range(self.num_epochs):
             print(f'Epoch {epoch}/{self.num_epochs - 1}')
@@ -276,8 +294,8 @@ class Trainer():
 
                 if phase == 'train':
                     # Save checkpoint
-                    save_path_nn = f'./drive/MyDrive/046211/{start_datetime}_model_epoch{str(epoch)}_nn.pt'
-                    save_path_ccl = f'./drive/MyDrive/046211/{start_datetime}_model_epoch{str(epoch)}_ccl.pt'
+                    save_path_nn = f'{self.checkpoint_path}/{start_datetime}_model_epoch{str(epoch)}_nn.pt'
+                    save_path_ccl = f'{self.checkpoint_path}/{start_datetime}_model_epoch{str(epoch)}_ccl.pt'
                     # Save the NN optimizer
                     torch.save({
                         'epoch': epoch,
@@ -288,7 +306,7 @@ class Trainer():
                     # Save the CCL optimizer
                     torch.save({
                         'epoch': epoch,
-                        'model_state_dict': self.model.state_dict(),
+                        'model_state_dict': criterion_ccl.state_dict(),
                         'optimizer_state_dict': optimizer_ccl.state_dict(),
                         'loss': epoch_loss,
                     }, save_path_ccl)
@@ -297,6 +315,7 @@ class Trainer():
                 if phase == 'val' and epoch_acc > best_acc:
                     best_acc = epoch_acc
                     best_model_wts = copy.deepcopy(self.model.state_dict())
+                    best_epoch = epoch
 
             print()
 
@@ -315,21 +334,36 @@ class Trainer():
                                  'value': [str(self.criterion), str(optimizer_nn), str(optimizer_ccl),
                                            str(self.scheduler.step_size), str(self.scheduler.gamma),
                                            str(self.batch_size)]})
-        with pd.ExcelWriter(f'./drive/MyDrive/046211/{start_datetime}_model_results.xlsx') as writer:
+        with pd.ExcelWriter(f'{self.checkpoint_path}/{start_datetime}_model_results.xlsx') as writer:
             model_df.to_excel(writer, sheet_name='Model', index=False)
             epochs_df.to_excel(writer, sheet_name='Epochs', index=False)
             iterations_df.to_excel(writer, sheet_name='Iterations', index=False)
-        return
+        # save CCL
+        ccl_df = pd.DataFrame(criterion_ccl.data)
+        ccl_df.to_excel(f'{self.checkpoint_path}/ccl.xlsx')
+
+        best_checkpoint = f'{self.checkpoint_path}/{start_datetime}_model_epoch{str(best_epoch)}_nn.pt'
+        return best_checkpoint
 
     def evaluate_model(self):
-        X_test, y_test = list(iter(self.dataloaders['test']))[0]
         self.model.eval()
-        with torch.no_grad():
-            test_outputs = self.model(X_test.to(self.device))
-            _, preds = torch.max(test_outputs, 1)
-        test_acc = Metric.accurarcy(preds, y_test)
-        test_top_1_acc = Metric.top_k_acc(preds, y_test, k=1)
-        test_top_5_acc = Metric.top_k_acc(preds, y_test, k=5)
-        print(f'Test accurarcy: {test_acc}\nTest top 1% accurarcy: {test_top_1_acc}\n'
-              f'Test top 5% accurarcy: {test_top_5_acc}')
+
+        total_samples = 0
+        test_top_1_acc_correct = 0
+        test_top_5_acc_correct = 0
+
+        # Divided to batch to prevent out of memory
+        for iter_i, (inputs, labels) in enumerate(self.dataloaders['test']):
+            inputs = inputs.to(self.device)
+            labels = labels.to(self.device)
+            with torch.no_grad():
+                test_outputs = self.model(inputs)
+            test_top_1_acc_correct += Metric.top_k_acc(test_outputs, labels, k=1) * len(inputs)
+            test_top_5_acc_correct += Metric.top_k_acc(test_outputs, labels, k=5) * len(inputs)
+            total_samples += len(inputs)
+
+        test_top_1_acc = test_top_1_acc_correct / float(total_samples)
+        test_top_5_acc = test_top_5_acc_correct / float(total_samples)
+        print(f'Test top-1 accuracy: {test_top_1_acc:4f}\n'
+              f'Test top-5 accuracy: {test_top_5_acc:4f}')
         return

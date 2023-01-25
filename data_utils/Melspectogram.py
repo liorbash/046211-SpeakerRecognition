@@ -5,6 +5,14 @@ import torch
 
 
 def transform(waveform, n_fft=512, hop_length=160, n_mels=40):
+    """
+    Returns melspectrogram
+    :param waveform: torch.Tensor. From torchaudio.datasets.VoxCeleb1Identification
+    :param n_fft: int. window size of STFT calculation
+    :param hop_length: int. STFT hop size of STFT calculation
+    :param n_mels: int. number of mel scale frequencies to use
+    :return: torch.Tensor
+    """
     normalized_waveform = librosa.util.normalize(waveform)
     stft = librosa.core.stft(normalized_waveform, n_fft=n_fft, hop_length=hop_length)
     mel = librosa.feature.melspectrogram(S=stft, n_mels=n_mels)
