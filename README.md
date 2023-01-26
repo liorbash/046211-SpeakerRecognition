@@ -37,10 +37,31 @@ VoxCeleb1 is a dataset of speech snippets used for training and evaluating speak
 Due to computational and memory restrictions, our model was trained on the first 200 speakers (id = 1 to id = 200) but will work on a larger section of the dataset. 
 
 ### Training and testing different augmetations
+Firstly, in order to create a good baseline for our project, we tested two different normalization methods. The first being min-max scaling and the second normalizing by the frequency bins. It is important to note, that normalization is critical for the model to work properly since Resnet-18 expects a normalized input. We obtained the following
+![image](https://user-images.githubusercontent.com/74931703/214830343-dbee4b79-efd6-45fb-8a62-815edf8b5ca6.png)
 
+As seen above, both normalizations get an 100% accuracy on the train set, but have a large deficiency in the validation set. The frequency bins normalization got an accuracy score that is 15% higher than the min-max scaling normalization. Therefore, we chose it for our baseline to be the network.
 
+### Models results
+To examine the effect of Contrastive-center loss regularization, we ran the following experiments in addition to the baseline: 
+* Contrastive-center loss regularization with Adagrad optimizer with lr=0.001 and 𝜆=1
+* Contrastive-center loss regularization with Adam optimizer with lr=0.002 and 𝜆=0.55
 
+As seen below, the regularization did not effect the train loss.
+![image](https://user-images.githubusercontent.com/74931703/214831357-8bbc8245-6f6a-432a-8244-9f56d29cb2a4.png)
 
+In addition, in all cases on our validation set, we converge relatively to the same value but in a different pace.
+![image](https://user-images.githubusercontent.com/74931703/214831623-e4685ab0-2fb0-4726-8538-40a76ac8f7fc.png)
+
+Note that the value of the Contrastive-center loss is small from the first iteration - approximal $2\cdot10^(-4)$ as opposed to the Cross-Entropy loss that starts at the value of about 4. Due to the extreme size difference between the CCL regularization and the Cross Entropy loss, the CCL regularization has a minor impact on the train and validation coverage as seen inthe graphs above.
+
+| Model | Top-1 (%) | Top-5 (%) |
+| ------------- | ------------- | ------------- |
+| Baseline | **79.09** | 92.78 |
+| Contrastive-center loss with Adagrad | 78.98 | **93.24** |
+| Contrastive-center loss with Adam | 78.52 | 92.82 |
+
+As seen in the table above, all 3 experiments obtain similar top-1 accuracy, whereas the Contrastive-center loss experiment with Adagrad optimizer increased the top-5 accuracy by 0.5%, showing that the regularization improved the generalization of the model.
 
 ### Prerequisits
 | Library  | Version |
