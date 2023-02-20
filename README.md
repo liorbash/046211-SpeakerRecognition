@@ -82,7 +82,7 @@ As seen in the table above, all 3 experiments obtain similar top-1 accuracy, whe
 
   | Argument  | Explanation |
   | ------------- | ------------- |
-  | `n_speakers`  | the number of speakers wanted in the dataset, needs to be <= 1211 |
+  | `n_speakers`  | the number of speakers wanted in the dataset, needs to be <= 1251 |
   | `download`  | if Added to commandline, then downloading to `dataset_dir` the VoxCeleb1 dataset |
   | `dataset_dir`  | path to the directory of the dataset |
   | `resplit`  | if Added to commandline, then re-splitting the dataset to train, validation and loss accordint to `train_size` and `val_size` |
@@ -95,7 +95,7 @@ As seen in the table above, all 3 experiments obtain similar top-1 accuracy, whe
 
   | Argument  | Explanation |
   | ------------- | ------------- |
-  | `n_speakers`  | the number of speakers in the dataset, needs to be <= 1211 |
+  | `n_speakers`  | the number of speakers in the dataset, needs to be <= 1251 |
   | `dataset_dir`  | path to the directory of the dataset |
   | `checkpoint_dir`  | path to save the checkpoints |
   | `ccl_reg`  | if Added to commandline, then training with contrastive-center loss regularization |
