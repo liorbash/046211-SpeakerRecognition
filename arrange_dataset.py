@@ -3,7 +3,7 @@ import os
 import argparse
 from torchaudio import datasets
 
-VOXCELEB1_NUM_SPEAKERS = 1211
+VOXCELEB1_NUM_SPEAKERS = 1251
 SPLIT_FILE = 'iden_split.txt'
 
 
